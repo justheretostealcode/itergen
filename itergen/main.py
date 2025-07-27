@@ -5,7 +5,7 @@ from itergen import Grammar
 from transformers.generation.utils import GenerationMode
 from transformers.generation.configuration_utils import GenerationConfig
 from transformers.generation.stopping_criteria import StoppingCriteriaList
-from itergen.syncode.syncode.dfa_mask_store import DFAMaskStore
+from itergen.syncode.syncode.mask_store.mask_store import MaskStore
 from itergen.syncode.syncode.parse_result import ParseResult, RemainderState
 from itergen.syncode.syncode.parsers.incremental_parser import IncrementalParser, SymbolPosMap
 from transformers.cache_utils import DynamicCache
@@ -85,7 +85,7 @@ class IterGen:
         self._ignore_whitespace = self._get_ignore_whitespace(self.grammar)
 
         # Load dfa mask store
-        self.dfa_mask_store = DFAMaskStore.load_dfa_mask_store(
+        self.dfa_mask_store = MaskStore.init_mask_store(
                                     grammar=self.grammar, 
                                     tokenizer=self.tokenizer, 
                                     use_cache=True,
