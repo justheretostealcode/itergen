@@ -5,3 +5,4 @@
 [submodule "syncode"]
 	path = itergen/syncode
 	url = https://github.com/stg-tud/syncode.git
+	branch = dev_branch
