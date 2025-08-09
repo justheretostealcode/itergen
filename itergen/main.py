@@ -1,3 +1,4 @@
+from transformers import PhiForCausalLM
 import common
 import torch
 from typing import Any, Dict, Iterator, Optional, Tuple, Union
@@ -78,7 +79,7 @@ class IterGen:
 
         # Load model
         self.model_id = model_id
-        self.model = common.load_model(model_id, device, quantize)
+        self.model: PhiForCausalLM = common.load_model(model_id, device, quantize)
         self.tokenizer = common.load_tokenizer(model_id)
 
         # Ignore whitespace tokens
@@ -108,7 +109,7 @@ class IterGen:
         Update the generation arguments.
         """
         self.generation_config.update(**gen_args)
-        self.logit_warper = self.model._get_logits_warper(self.generation_config, device=self.device)
+        self.logit_warper = self.model._get_logits_processor(self.generation_config, device=self.device)
 
     def start(self, prompt: Union[str, list]):
         """

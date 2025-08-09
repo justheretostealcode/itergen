@@ -3,7 +3,7 @@ interegular
 regex==2023.8.8
 torch
 tqdm
-transformers==4.42.0
+transformers==4.53.2; python_version < "3.13"
 mxeval @ git+https://github.com/shubhamugare/mxeval.git
 datasets
 jsonschema
