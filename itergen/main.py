@@ -1,3 +1,4 @@
+import logging
 from transformers import PhiForCausalLM
 import common
 import torch
@@ -66,6 +67,7 @@ class IterGen:
             **gen_args: dict
         ) -> None:
 
+        self._logger = logging.getLogger(__name__)
         self.grammar = Grammar(grammar)
         self.default_unit = default_unit
         self.device = device
