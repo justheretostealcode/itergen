@@ -13,6 +13,7 @@ from itergen.syncode.syncode.parsers.incremental_parser import IncrementalParser
 from transformers.cache_utils import DynamicCache
 from itergen.trace import Trace
 from parsers import create_base_parser, create_parser
+from itergen.syncode.syncode.larkm import Token
 
 
 class IterGen:
@@ -674,4 +675,8 @@ class IterGen:
         if isinstance(token, torch.Tensor):
             return token.to(device)
         return torch.tensor(token, device=device, dtype=torch.long)
+
+
+    def get_defined_variables(self) -> set[Token]:
+        return self.inc_parsers[0]._defined_vars
     
