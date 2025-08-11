@@ -109,6 +109,9 @@ class IterGen:
         #set that holds all variables defined within the LLM output with a relative tokenposition to the end
         self.def_vars_with_position: set[tuple[str, int]] = set()
 
+        #set that holds all variables used within the LLM output with a relative tokenposition to the end from the first time the variable is used
+        self.used_vars_with_position: set[tuple[str, int]] = set()
+
     
     def update_gen_args(self, **gen_args: dict) -> None:
         """
@@ -302,28 +305,34 @@ class IterGen:
             unfinished_sequences = unfinished_sequences & ~self.stopping_criteria(self.session_tokens, ())
             this_peer_finished = unfinished_sequences.max() == 0
 
-            #Update tokencount for variable tracking
-            copy_def_vars_with_position = self.def_vars_with_position
-            self.def_vars_with_position = set()
-            for parser_variable in self.inc_parsers[0].get_defined_vars(): 
-                
-                offset = 0
+            self.def_vars_with_position = self.update_vars_with_position(
+                self.def_vars_with_position, self.inc_parsers[0].get_defined_vars())
 
-                for variable_name, var_offset in copy_def_vars_with_position:
-                    if parser_variable == variable_name:
-                        var_offset += 1
-                        offset = var_offset
-                        continue
-
-                #print(f"{parser_variable=}")
-                #print(f"{offset=}")
-                self.def_vars_with_position.add((parser_variable, offset))
+            self.used_vars_with_position = self.update_vars_with_position(
+                self.used_vars_with_position,  self.inc_parsers[0].get_used_vars())
 
         # Update the model kwargs at the end of the generation 
         # self._post_update_model_kwargs(**self.model_kwargs)
 
         return self.structured_gen.copy()
     
+    def update_vars_with_position(self, old_set, updated_set):
+        #Update tokencount for variable tracking
+        copy_vars_with_position = old_set
+        new_set = set()
+        for parser_variable in updated_set: 
+            
+            offset = 0
+
+            for variable_name, var_offset in copy_vars_with_position:
+                if parser_variable == variable_name:
+                    var_offset += 1
+                    offset = var_offset
+                    continue
+
+            new_set.add((parser_variable, offset))
+
+        return new_set
 
     def backward(self, unit:Optional[str]=None, num:int=1) -> str:
         """
@@ -699,4 +708,7 @@ class IterGen:
 
     def get_defined_variables(self) -> set[tuple[str, int]]:
         return self.def_vars_with_position
+    
+    def get_used_variables(self) -> set[tuple[str, int]]:
+        return self.used_vars_with_position
     
