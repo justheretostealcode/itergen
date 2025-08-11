@@ -106,6 +106,9 @@ class IterGen:
         self.update_gen_args(**gen_args)
         self.pad_token_id = self.tokenizer.pad_token_id if self.tokenizer.pad_token_id else -1
 
+        #set that holds all variables defined within the LLM output with a relative tokenposition to the end
+        self.def_vars_with_position: set[tuple[str, int]] = set()
+
     
     def update_gen_args(self, **gen_args: dict) -> None:
         """
@@ -297,7 +300,24 @@ class IterGen:
 
             # Update the unfinished sequences
             unfinished_sequences = unfinished_sequences & ~self.stopping_criteria(self.session_tokens, ())
-            this_peer_finished = unfinished_sequences.max() == 0     
+            this_peer_finished = unfinished_sequences.max() == 0
+
+            #Update tokencount for variable tracking
+            copy_def_vars_with_position = self.def_vars_with_position
+            self.def_vars_with_position = set()
+            for parser_variable in self.inc_parsers[0].get_defined_vars(): 
+                
+                offset = 0
+
+                for variable_name, var_offset in copy_def_vars_with_position:
+                    if parser_variable == variable_name:
+                        var_offset += 1
+                        offset = var_offset
+                        continue
+
+                #print(f"{parser_variable=}")
+                #print(f"{offset=}")
+                self.def_vars_with_position.add((parser_variable, offset))
 
         # Update the model kwargs at the end of the generation 
         # self._post_update_model_kwargs(**self.model_kwargs)
@@ -677,6 +697,6 @@ class IterGen:
         return torch.tensor(token, device=device, dtype=torch.long)
 
 
-    def get_defined_variables(self) -> set[Token]:
-        return self.inc_parsers[0]._defined_vars
+    def get_defined_variables(self) -> set[tuple[str, int]]:
+        return self.def_vars_with_position
     
