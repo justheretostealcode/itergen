@@ -107,10 +107,10 @@ class IterGen:
         self.pad_token_id = self.tokenizer.pad_token_id if self.tokenizer.pad_token_id else -1
 
         #set that holds all variables defined within the LLM output with a relative tokenposition to the end
-        self.def_vars_with_position: set[tuple[str, int]] = set()
+        self.def_vars_with_position: Dict[str, int] =  {}
 
         #set that holds all variables used within the LLM output with a relative tokenposition to the end from the first time the variable is used
-        self.used_vars_with_position: set[tuple[str, int]] = set()
+        self.used_vars_with_position: Dict[str, int] = {}
 
     
     def update_gen_args(self, **gen_args: dict) -> None:
@@ -305,34 +305,30 @@ class IterGen:
             unfinished_sequences = unfinished_sequences & ~self.stopping_criteria(self.session_tokens, ())
             this_peer_finished = unfinished_sequences.max() == 0
 
-            self.def_vars_with_position = self.update_vars_with_position(
-                self.def_vars_with_position, self.inc_parsers[0].get_defined_vars())
-
-            self.used_vars_with_position = self.update_vars_with_position(
-                self.used_vars_with_position,  self.inc_parsers[0].get_used_vars())
+            #Update variablecount with parser information on which variables are being used
+            self._update_vars_with_position(self.def_vars_with_position, self.inc_parsers[0].get_defined_vars())
+            self._update_vars_with_position(self.used_vars_with_position,  self.inc_parsers[0].get_used_vars())
 
         # Update the model kwargs at the end of the generation 
         # self._post_update_model_kwargs(**self.model_kwargs)
 
         return self.structured_gen.copy()
     
-    def update_vars_with_position(self, old_set, updated_set):
-        #Update tokencount for variable tracking
-        copy_vars_with_position = old_set
-        new_set = set()
-        for parser_variable in updated_set: 
+    def _update_vars_with_position(self, old_set: Dict[str, int], updated_set: set[str]) -> None:
+        """
+        Args:
+            old_set (Dict[str, int]): The dictionary containing the variable name and token count
+            updated_set (Dict[str, int]): A set of variable names that should be increased
+        """
+        
+        for variable_name in updated_set: 
             
-            offset = 0
+            if variable_name in old_set:
+                old_set[variable_name] = old_set[variable_name] + 1
 
-            for variable_name, var_offset in copy_vars_with_position:
-                if parser_variable == variable_name:
-                    var_offset += 1
-                    offset = var_offset
-                    continue
+            else:
+                old_set[variable_name] = 1
 
-            new_set.add((parser_variable, offset))
-
-        return new_set
 
     def backward(self, unit:Optional[str]=None, num:int=1) -> str:
         """
