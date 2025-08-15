@@ -14,6 +14,7 @@ from transformers.cache_utils import DynamicCache
 from itergen.trace import Trace
 from parsers import create_base_parser, create_parser
 from itergen.syncode.syncode.larkm import Token
+from syncode.parsers.python_var_tracking_parser import PythonVarTrackingIncrementalParser
 
 
 class IterGen:
@@ -32,6 +33,8 @@ class IterGen:
         The device to run the model on.
     quantize: bool
         Whether to quantize the model.
+    predefined_vars: list[str]
+        list of variable names that are already defined
     gen_args: dict
         The generation configuration for the model e.g. temperature, do_sample, etc. The full list of arguments can be found in the Huggingface documentation https://huggingface.co/docs/transformers/v4.43.3/en/main_classes/text_generation#transformers.GenerationConfig
         The most common ones are:
@@ -65,6 +68,7 @@ class IterGen:
             max_tokens:int=1000,
             parse_output_only:bool=True,
             recurrence_penalty:float=1.0,
+            predefined_vars: list[str] = [],
             **gen_args: dict
         ) -> None:
 
@@ -106,11 +110,11 @@ class IterGen:
         self.update_gen_args(**gen_args)
         self.pad_token_id = self.tokenizer.pad_token_id if self.tokenizer.pad_token_id else -1
 
-        #set that holds all variables defined within the LLM output with a relative tokenposition to the end
+        #set that holds all variables defined/used within the LLM output with a relative tokenposition to the end from the first time the variable is defined/used
         self.def_vars_with_position: Dict[str, int] =  {}
-
-        #set that holds all variables used within the LLM output with a relative tokenposition to the end from the first time the variable is used
         self.used_vars_with_position: Dict[str, int] = {}
+
+        self.predefined_vars = predefined_vars
 
     
     def update_gen_args(self, **gen_args: dict) -> None:
@@ -214,7 +218,12 @@ class IterGen:
         unfinished_sequences = torch.ones(self.num_outputs, dtype=torch.long, device=self.device)
         this_peer_finished = False
 
+        index = 0
+
         while not this_peer_finished:
+
+            index += 1
+
             try:
                 if self.model_kwargs['past_key_values']: # Get the last token if kv is cached for all previous tokens
                     input_ids = self.session_tokens[..., -1].unsqueeze(-1) 
@@ -305,15 +314,57 @@ class IterGen:
             unfinished_sequences = unfinished_sequences & ~self.stopping_criteria(self.session_tokens, ())
             this_peer_finished = unfinished_sequences.max() == 0
 
-            #Update variablecount with parser information on which variables are being used
-            self._update_vars_with_position(self.def_vars_with_position, self.inc_parsers[0].get_defined_vars())
-            self._update_vars_with_position(self.used_vars_with_position,  self.inc_parsers[0].get_used_vars())
+
+            #custom vartracking logic for PythonVarTrackingIncrementalParser
+            if  isinstance(self.inc_parsers[0], PythonVarTrackingIncrementalParser):
+                #Update variablecount with parser information on which variables are being used
+                self._update_vars_with_position(self.def_vars_with_position, self.inc_parsers[0].get_defined_vars())
+                self._update_vars_with_position(self.used_vars_with_position,  self.inc_parsers[0].get_used_vars())
+
+                #check if all used variables are defined
+                variable_name = self._variable_usage_consistent(self.def_vars_with_position, self.used_vars_with_position)
+
+                print("-" * 20)
+                print(f"{index=}")
+                print(f"{self.def_vars_with_position=}")
+                print(f"{self.used_vars_with_position=}")
+
+                if variable_name: 
+                    backtrack_amount = 10
+                    backtracked = self.backward("token", backtrack_amount)
+                    index -= backtrack_amount
+
+                    #reset var containers
+                    self.def_vars_with_position = self._backtrack_vars(self.def_vars_with_position, backtrack_amount)
+                    self.used_vars_with_position = self._backtrack_vars(self.used_vars_with_position, backtrack_amount)
+
+                    print(f"backtracked to: {backtracked}")
+
 
         # Update the model kwargs at the end of the generation 
         # self._post_update_model_kwargs(**self.model_kwargs)
 
         return self.structured_gen.copy()
     
+
+    def _backtrack_vars(self, var_dict: Dict[str, int], backtrack_amount ):
+
+        for variable_name, token_range in var_dict.items():
+            var_dict[variable_name] -= backtrack_amount
+
+        return {key: value for key, value in var_dict.items() if value > 0}
+
+
+    def _variable_usage_consistent(self, defined_vars, used_vars):
+
+        for varname in used_vars:
+
+            if varname not in defined_vars and varname not in self.predefined_vars:
+                return varname
+
+        return None
+    
+  
     def _update_vars_with_position(self, old_set: Dict[str, int], updated_set: set[str]) -> None:
         """
         Args:
@@ -345,6 +396,7 @@ class IterGen:
         
         assert unit == 'token' or self.inc_parsers[0].symbol_pos_map.is_present(unit), f"Unit {unit} is not present in the generation."
 
+
         for idx in range(self.num_outputs):
             cnt_init_tokens = len(self.session_tokens[idx])
             backtrack_till_prompt = False
@@ -372,10 +424,12 @@ class IterGen:
                     backtrack_till_prompt = True
 
             if backtrack_till_prompt or (self.parse_output_only == False and target_char_pos < len(self.session_prompt)):
+                print(f"{target_char_pos=}")
                 print(f"Warning: The target position on backtracking {target_char_pos} is less than the prompt length. Backtracking till the prompt start.")
                 target_char_pos = len(self.session_prompt)
 
             # Backtrack till the target position
+            
             self._backtrack_till_char_pos(idx, target_char_pos)
              
         return self.structured_gen.copy()
@@ -390,6 +444,7 @@ class IterGen:
         target_char_pos: (int) The target character position to backtrack to.
         """
         # Update symbol position map and remove the units that are beyond the target_char_pos
+
         for ip in self.inc_parsers:
             ip.symbol_pos_map.crop(target_char_pos)
 
