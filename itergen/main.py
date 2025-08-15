@@ -324,10 +324,11 @@ class IterGen:
                 #check if all used variables are defined
                 variable_name = self._variable_usage_consistent(self.def_vars_with_position, self.used_vars_with_position)
 
-                print("-" * 20)
-                print(f"{index=}")
-                print(f"{self.def_vars_with_position=}")
-                print(f"{self.used_vars_with_position=}")
+                #print("-" * 20)
+                #print(f"{index=}")
+                #print(f"{self.structured_gen=}")
+                #print(f"{self.def_vars_with_position=}")
+                #print(f"{self.used_vars_with_position=}")
 
                 if variable_name: 
                     backtrack_amount = 10
@@ -424,8 +425,7 @@ class IterGen:
                     backtrack_till_prompt = True
 
             if backtrack_till_prompt or (self.parse_output_only == False and target_char_pos < len(self.session_prompt)):
-                print(f"{target_char_pos=}")
-                print(f"Warning: The target position on backtracking {target_char_pos} is less than the prompt length. Backtracking till the prompt start.")
+                #print(f"Warning: The target position on backtracking {target_char_pos} is less than the prompt length. Backtracking till the prompt start.")
                 target_char_pos = len(self.session_prompt)
 
             # Backtrack till the target position
