@@ -15,6 +15,7 @@ from itergen.trace import Trace
 from parsers import create_base_parser, create_parser
 from itergen.syncode.syncode.larkm import Token
 from syncode.parsers.python_var_tracking_parser import PythonVarTrackingIncrementalParser
+import builtins
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +73,7 @@ class IterGen:
             recurrence_penalty:float=1.0,
             predefined_vars: list[str] = [],
             parser: Literal["lr", "lalr"] = "lalr",
-            backtracking_allowed = True,
+            backtracking_allowed = False,
             backtracking_leniancy_tokens = 30,
             **gen_args: dict
         ) -> None:
@@ -118,8 +119,16 @@ class IterGen:
         #set that holds all variables defined/used within the LLM output with a relative tokenposition to the end from the first time the variable is defined/used
         self.def_vars_with_position: Dict[str, int] =  {}
         self.used_vars_with_position: Dict[str, int] = {}
-
+        
         self.predefined_vars = predefined_vars
+
+        #set buildin functions as predefined variable names
+        default_python_methods = [name for name in dir(builtins) if callable(getattr(builtins, name))]
+
+        for name in default_python_methods:
+            self.predefined_vars.append(name) 
+        print(default_python_methods)
+        
 
         self.backtracking_allowed = backtracking_allowed
         self.backtracking_leniancy_tokens = backtracking_leniancy_tokens
@@ -331,7 +340,7 @@ class IterGen:
                 #check if all used variables are defined
                 variable_name = self._variable_usage_consistent(self.def_vars_with_position, self.used_vars_with_position)
 
-                logger.debug(f"{index=}; {self.structured_gen=}; {self.def_vars_with_position=}; {self.used_vars_with_position=}")
+                logger.debug(f"{index=}\n {self.structured_gen=}\n {self.def_vars_with_position=}\n {self.used_vars_with_position=}")
 
                 #print("-" * 20)
                 #print(f"{index=}")
@@ -341,7 +350,7 @@ class IterGen:
 
                 if variable_name and self.used_vars_with_position[variable_name] > self.backtracking_leniancy_tokens:
 
-                    logger.warning(f"{index=}; {self.structured_gen=}; {self.def_vars_with_position=}; {self.used_vars_with_position=}; issue={variable_name}")
+                    logger.warning(f"{index=}\n {self.structured_gen=}\n {self.def_vars_with_position=}\n {self.used_vars_with_position=}\n issue={variable_name}")
 
                     backtrack_amount = self.backtracking_leniancy_tokens + 10
                     backtracked = self.backward("token", backtrack_amount)
