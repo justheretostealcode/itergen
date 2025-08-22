@@ -2,7 +2,7 @@ import logging
 from transformers import PhiForCausalLM
 import common
 import torch
-from typing import Any, Dict, Iterator, Optional, Tuple, Union
+from typing import Any, Dict, Iterator, Literal, Optional, Tuple, Union
 from itergen import Grammar
 from transformers.generation.utils import GenerationMode
 from transformers.generation.configuration_utils import GenerationConfig
@@ -69,6 +69,7 @@ class IterGen:
             parse_output_only:bool=True,
             recurrence_penalty:float=1.0,
             predefined_vars: list[str] = [],
+            parser: Literal["lr", "lalr"] = "lalr",
             **gen_args: dict
         ) -> None:
 
