@@ -16,6 +16,8 @@ from parsers import create_base_parser, create_parser
 from itergen.syncode.syncode.larkm import Token
 from syncode.parsers.python_var_tracking_parser import PythonVarTrackingIncrementalParser
 
+logger = logging.getLogger(__name__)
+
 
 class IterGen:
     """
@@ -70,6 +72,8 @@ class IterGen:
             recurrence_penalty:float=1.0,
             predefined_vars: list[str] = [],
             parser: Literal["lr", "lalr"] = "lalr",
+            backtracking_allowed = True,
+            backtracking_leniancy_tokens = 30,
             **gen_args: dict
         ) -> None:
 
@@ -117,6 +121,8 @@ class IterGen:
 
         self.predefined_vars = predefined_vars
 
+        self.backtracking_allowed = backtracking_allowed
+        self.backtracking_leniancy_tokens = backtracking_leniancy_tokens
     
     def update_gen_args(self, **gen_args: dict) -> None:
         """
@@ -317,7 +323,7 @@ class IterGen:
 
 
             #custom vartracking logic for PythonVarTrackingIncrementalParser
-            if  isinstance(self.inc_parsers[0], PythonVarTrackingIncrementalParser):
+            if  isinstance(self.inc_parsers[0], PythonVarTrackingIncrementalParser) and self.backtracking_allowed:
                 #Update variablecount with parser information on which variables are being used
                 self._update_vars_with_position(self.def_vars_with_position, self.inc_parsers[0].get_defined_vars())
                 self._update_vars_with_position(self.used_vars_with_position,  self.inc_parsers[0].get_used_vars())
@@ -331,8 +337,11 @@ class IterGen:
                 #print(f"{self.def_vars_with_position=}")
                 #print(f"{self.used_vars_with_position=}")
 
-                if variable_name: 
-                    backtrack_amount = 10
+                if variable_name and self.used_vars_with_position[variable_name] > self.backtracking_leniancy_tokens:
+
+                    logger.debug(f"{index=}; {self.structured_gen=}; {self.def_vars_with_position=}; {self.used_vars_with_position=}; issue={variable_name}")
+
+                    backtrack_amount = self.backtracking_leniancy_tokens + 10
                     backtracked = self.backward("token", backtrack_amount)
                     index -= backtrack_amount
 
@@ -340,7 +349,14 @@ class IterGen:
                     self.def_vars_with_position = self._backtrack_vars(self.def_vars_with_position, backtrack_amount)
                     self.used_vars_with_position = self._backtrack_vars(self.used_vars_with_position, backtrack_amount)
 
-                    print(f"backtracked to: {backtracked}")
+                    logger.debug(f"{backtracked=}")
+
+                    #print(f"{index=}")
+                    #print(f"{self.structured_gen=}")
+                    #print(f"{self.def_vars_with_position=}")
+                    #print(f"{self.used_vars_with_position=}")
+
+
 
 
         # Update the model kwargs at the end of the generation 
@@ -349,7 +365,7 @@ class IterGen:
         return self.structured_gen.copy()
     
 
-    def _backtrack_vars(self, var_dict: Dict[str, int], backtrack_amount ):
+    def _backtrack_vars(self, var_dict: Dict[str, int], backtrack_amount) -> Dict[str, int]:
 
         for variable_name, token_range in var_dict.items():
             var_dict[variable_name] -= backtrack_amount
@@ -357,7 +373,7 @@ class IterGen:
         return {key: value for key, value in var_dict.items() if value > 0}
 
 
-    def _variable_usage_consistent(self, defined_vars, used_vars):
+    def _variable_usage_consistent(self, defined_vars, used_vars) -> str| None:
 
         for varname in used_vars:
 
@@ -368,11 +384,6 @@ class IterGen:
     
   
     def _update_vars_with_position(self, old_set: Dict[str, int], updated_set: set[str]) -> None:
-        """
-        Args:
-            old_set (Dict[str, int]): The dictionary containing the variable name and token count
-            updated_set (Dict[str, int]): A set of variable names that should be increased
-        """
         
         for variable_name in updated_set: 
             
@@ -381,6 +392,19 @@ class IterGen:
 
             else:
                 old_set[variable_name] = 1
+
+        #Because some variable names are first wrongfully identified as used and later updated to be defined
+        #all variable names, that are not detected by the parser need to be deleted
+        deletable_var = []
+        for variable_name in old_set:
+            
+
+            if variable_name not in updated_set:
+                deletable_var.append(variable_name)
+                pass
+
+        for variable_name in deletable_var:
+            old_set.__delitem__(variable_name)
 
 
     def backward(self, unit:Optional[str]=None, num:int=1) -> str:
