@@ -331,6 +331,8 @@ class IterGen:
                 #check if all used variables are defined
                 variable_name = self._variable_usage_consistent(self.def_vars_with_position, self.used_vars_with_position)
 
+                logger.debug(f"{index=}; {self.structured_gen=}; {self.def_vars_with_position=}; {self.used_vars_with_position=}")
+
                 #print("-" * 20)
                 #print(f"{index=}")
                 #print(f"{self.structured_gen=}")
@@ -339,7 +341,7 @@ class IterGen:
 
                 if variable_name and self.used_vars_with_position[variable_name] > self.backtracking_leniancy_tokens:
 
-                    logger.debug(f"{index=}; {self.structured_gen=}; {self.def_vars_with_position=}; {self.used_vars_with_position=}; issue={variable_name}")
+                    logger.warning(f"{index=}; {self.structured_gen=}; {self.def_vars_with_position=}; {self.used_vars_with_position=}; issue={variable_name}")
 
                     backtrack_amount = self.backtracking_leniancy_tokens + 10
                     backtracked = self.backward("token", backtrack_amount)
@@ -349,7 +351,7 @@ class IterGen:
                     self.def_vars_with_position = self._backtrack_vars(self.def_vars_with_position, backtrack_amount)
                     self.used_vars_with_position = self._backtrack_vars(self.used_vars_with_position, backtrack_amount)
 
-                    logger.debug(f"{backtracked=}")
+                    logger.warning(f"{backtracked=}")
 
                     #print(f"{index=}")
                     #print(f"{self.structured_gen=}")
