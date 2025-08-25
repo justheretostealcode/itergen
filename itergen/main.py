@@ -342,12 +342,6 @@ class IterGen:
 
                 logger.debug(f"{index=}\n {self.structured_gen=}\n {self.def_vars_with_position=}\n {self.used_vars_with_position=}")
 
-                #print("-" * 20)
-                #print(f"{index=}")
-                #print(f"{self.structured_gen=}")
-                #print(f"{self.def_vars_with_position=}")
-                #print(f"{self.used_vars_with_position=}")
-
                 if variable_name and self.used_vars_with_position[variable_name] > self.backtracking_leniancy_tokens:
 
                     logger.warning(f"{index=}\n {self.structured_gen=}\n {self.def_vars_with_position=}\n {self.used_vars_with_position=}\n issue={variable_name}")
@@ -362,14 +356,6 @@ class IterGen:
 
                     logger.warning(f"{backtracked=}")
 
-                    #print(f"{index=}")
-                    #print(f"{self.structured_gen=}")
-                    #print(f"{self.def_vars_with_position=}")
-                    #print(f"{self.used_vars_with_position=}")
-
-
-
-
         # Update the model kwargs at the end of the generation 
         # self._post_update_model_kwargs(**self.model_kwargs)
 
@@ -377,7 +363,6 @@ class IterGen:
     
 
     def _backtrack_vars(self, var_dict: Dict[str, int], backtrack_amount) -> Dict[str, int]:
-
         for variable_name, token_range in var_dict.items():
             var_dict[variable_name] -= backtrack_amount
 
@@ -385,7 +370,6 @@ class IterGen:
 
 
     def _variable_usage_consistent(self, defined_vars, used_vars) -> str| None:
-
         for varname in used_vars:
 
             if varname not in defined_vars and varname not in self.predefined_vars:
@@ -395,7 +379,6 @@ class IterGen:
     
   
     def _update_vars_with_position(self, old_set: Dict[str, int], updated_set: set[str]) -> None:
-        
         for variable_name in updated_set: 
             
             if variable_name in old_set:
